@@ -2,8 +2,9 @@
 import './globals.css';
 import React from 'react';
 import ThemeToggle from '@/components/ThemeToggle';
+import { Metadata } from "next";
 
-export const metadata = {
+export const metadata: Metadata = {
     title: 'Epicraft Mod Explorer',
     description: 'Live mod compatibility tracking for the Epicraft community.',
 };

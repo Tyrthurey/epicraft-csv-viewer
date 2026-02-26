@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 
 interface CellData {
     value: unknown;
+    hyperlink?: string;
     color?: string;
 }
 
@@ -84,11 +85,12 @@ export default function TableClient({ sheets }: { sheets: SheetData[] }) {
         // Exclude the legend/note rows that appear at the top of sheets
         rows = rows.filter(r => {
             const firstCell = Object.values(r)[0];
-            const firstVal = String(firstCell?.value || '');
+            const firstVal = String(firstCell?.value || '').trim();
+            const lowerVal = firstVal.toLowerCase();
             return firstVal &&
-                   !firstVal.includes('check = available') &&
-                   !firstVal.includes('Server/both side mods') &&
-                   firstVal !== 'MOD NAME';
+                   !lowerVal.includes('check = available') &&
+                   !lowerVal.includes('server/both side mods') &&
+                   lowerVal !== 'mod name';
         });
 
         if (!q) return rows;
@@ -100,12 +102,41 @@ export default function TableClient({ sheets }: { sheets: SheetData[] }) {
         );
     }, [q, currentSheet]);
 
-    // Check if a row is a category delimiter (all version fields contain dashes)
-    const isCategoryDelimiter = (row: Row, versionFields: string[]) => {
-        return versionFields.every(field => {
+    // Check if a row is a category delimiter
+    const isCategoryDelimiter = (row: Row, versionFields: string[], allFields: string[]) => {
+        if (versionFields.length === 0) return false;
+
+        const firstCell = Object.values(row)[0];
+        const firstVal = String(firstCell?.value || '').trim();
+        if (!firstVal) return false;
+
+        // Check if all version fields are dashes
+        const allDashes = versionFields.every(field => {
             const val = String(row[field]?.value || '').trim();
-            return val.match(/^-+$/);
+            return val !== '' && !!val.match(/^-+$/);
         });
+        if (allDashes) return true;
+
+        // Check if version fields repeat headers or are empty
+        const allMatchOrEmpty = versionFields.every(field => {
+            const val = String(row[field]?.value || '').trim().toLowerCase();
+            const fieldLower = field.toLowerCase().trim();
+            return val === '' || val === fieldLower;
+        });
+
+        if (allMatchOrEmpty) {
+            // Avoid treating the header row itself as a category if it somehow leaked through
+            if (firstVal.toLowerCase() === 'mod name') return false;
+
+            // For it to be a category title (like "General mods"), 
+            // the link/note fields should usually be empty too.
+            const otherFields = allFields.filter(f => !versionFields.includes(f) && f !== allFields[0]);
+            const otherEmpty = otherFields.every(f => String(row[f]?.value || '').trim() === '');
+
+            if (otherEmpty) return true;
+        }
+
+        return false;
     };
 
     // Group rows by categories
@@ -113,15 +144,15 @@ export default function TableClient({ sheets }: { sheets: SheetData[] }) {
         const groups: Array<{ type: 'delimiter' | 'cards'; data: Row | Row[] }> = [];
         let currentGroup: Row[] = [];
 
-        filteredRows.forEach((row) => {
-            const versionFields = currentSheet.fields.filter(f =>
-                f.toLowerCase().includes('1.') ||
-                f.toLowerCase().includes('neo') ||
-                f.toLowerCase().includes('fabric') ||
-                f.toLowerCase().includes('forge')
-            );
+        const versionFields = currentSheet.fields.filter(f =>
+            f.toLowerCase().includes('1.') ||
+            f.toLowerCase().includes('neo') ||
+            f.toLowerCase().includes('fabric') ||
+            f.toLowerCase().includes('forge')
+        );
 
-            if (isCategoryDelimiter(row, versionFields)) {
+        filteredRows.forEach((row) => {
+            if (isCategoryDelimiter(row, versionFields, currentSheet.fields)) {
                 if (currentGroup.length > 0) {
                     groups.push({ type: 'cards', data: currentGroup });
                     currentGroup = [];
@@ -224,9 +255,30 @@ export default function TableClient({ sheets }: { sheets: SheetData[] }) {
                                 const modNameCell = row['MOD NAME'] || Object.values(row)[0];
                                 const modName = String(modNameCell?.value || 'Unknown Mod');
 
-                                const link1 = String(row['Link']?.value || '');
-                                const link2 = String(row['Link 2']?.value || '');
-                                const links = [link1, link2].filter(l => l && (l.startsWith('http') || l.length > 5));
+                                const getLinkInfo = (cell?: CellData): { url: string; label: string } | null => {
+                                    if (!cell) return null;
+                                    const value = String(cell.value || '').trim();
+                                    const hyperlink = cell.hyperlink;
+                                    
+                                    if (hyperlink) {
+                                        return { url: hyperlink, label: value || hyperlink };
+                                    }
+                                    
+                                    if (value.startsWith('http')) {
+                                        return { url: value, label: value };
+                                    }
+                                    
+                                    if (value.length > 0) {
+                                        // It's a search term or a short name
+                                        return { url: `https://www.google.com/search?q=${encodeURIComponent(modName + ' ' + value)}`, label: value };
+                                    }
+                                    
+                                    return null;
+                                };
+
+                                const link1 = getLinkInfo(row['Link']);
+                                const link2 = getLinkInfo(row['Link 2']);
+                                const links = [link1, link2].filter((l): l is { url: string; label: string } => l !== null);
 
                                 const note1 = String(row['Video/Note']?.value || '');
                                 const note2 = String(row['Note 2']?.value || '');
@@ -260,21 +312,16 @@ export default function TableClient({ sheets }: { sheets: SheetData[] }) {
                                             {links.map((link, i) => (
                                                 <a
                                                     key={i}
-                                                    href={link.startsWith('http') ? link : `https://www.google.com/search?q=${encodeURIComponent(modName + ' ' + link)}`}
+                                                    href={link.url}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-medium bg-linear-to-r from-orange-50 to-rose-50 dark:from-orange-900/40 dark:to-rose-900/40 text-orange-700 dark:text-orange-400 hover:from-orange-500 hover:to-rose-500 dark:hover:from-orange-600 dark:hover:to-rose-600 hover:text-white hover:shadow-sm transition-all duration-200"
                                                 >
-                                                    {link.startsWith('http') ? (
-                                                        <>
-                                                            <span className="text-xs">↗</span>
-                                                            {link.includes('modrinth') ? 'Modrinth' : link.includes('curseforge') ? 'CurseForge' : 'Source'}
-                                                        </>
+                                                    <span className="text-xs">{link.url.includes('google.com/search') ? '🔍' : '↗'}</span>
+                                                    {link.label.startsWith('http') ? (
+                                                        link.label.includes('modrinth') ? 'Modrinth' : link.label.includes('curseforge') ? 'CurseForge' : 'Source'
                                                     ) : (
-                                                        <>
-                                                            <span className="text-xs">🔍</span>
-                                                            {link}
-                                                        </>
+                                                        link.label
                                                     )}
                                                 </a>
                                             ))}

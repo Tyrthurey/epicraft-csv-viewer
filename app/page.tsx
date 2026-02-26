@@ -1,5 +1,6 @@
 // app/page.tsx
 import React from 'react';
+import Link from 'next/link';
 import * as ExcelJS from 'exceljs';
 import TableClient from '@/components/TableClient';
 
@@ -7,7 +8,21 @@ export const dynamic = 'force-dynamic';
 
 interface CellData {
   value: unknown;
+  hyperlink?: string;
   color?: string;
+}
+
+function cleanGoogleLink(url: string): string {
+  if (url.includes('google.com/url?q=')) {
+    try {
+      const parsed = new URL(url);
+      const q = parsed.searchParams.get('q');
+      return q || url;
+    } catch {
+      return url;
+    }
+  }
+  return url;
 }
 
 type Row = Record<string, CellData>;
@@ -74,12 +89,23 @@ async function fetchExcelData(url: string): Promise<{ data?: SheetData[]; error?
           if (!fieldName) return;
 
           let cellValue: unknown = cell.value;
+          let hyperlink: string | undefined;
+
           // Handle hyperlinks
-          if (cellValue && typeof cellValue === 'object' && 'text' in cellValue) {
-             cellValue = (cellValue as { text: unknown }).text;
+          if (cellValue && typeof cellValue === 'object') {
+            if ('hyperlink' in cellValue) {
+               hyperlink = cleanGoogleLink(String((cellValue as { hyperlink: string }).hyperlink));
+            }
+            if ('text' in cellValue) {
+               cellValue = (cellValue as { text: unknown }).text;
+            }
+            if (cellValue && typeof cellValue === 'object' && 'result' in cellValue) {
+               cellValue = (cellValue as { result: unknown }).result;
+            }
           }
-          if (cellValue && typeof cellValue === 'object' && 'result' in cellValue) {
-             cellValue = (cellValue as { result: unknown }).result;
+
+          if (typeof cellValue === 'string') {
+            cellValue = cleanGoogleLink(cellValue);
           }
 
           let color: string | undefined;
@@ -90,6 +116,7 @@ async function fetchExcelData(url: string): Promise<{ data?: SheetData[]; error?
 
           rowData[fieldName] = {
             value: cellValue === null ? '' : cellValue,
+            hyperlink: hyperlink,
             color: color
           };
           
@@ -157,12 +184,12 @@ export default async function Page() {
               </ul>
             </div>
 
-            <button
-                onClick={() => typeof window !== 'undefined' && window.location.reload()}
-                className="w-full py-3.5 bg-linear-to-r from-orange-500 to-rose-500 text-white rounded-xl font-medium hover:shadow-md hover:shadow-orange-200/50 transition-all active:scale-95"
+            <Link
+                href="/"
+                className="w-full py-3.5 bg-linear-to-r from-orange-500 to-rose-500 text-white rounded-xl font-medium hover:shadow-md hover:shadow-orange-200/50 transition-all active:scale-95 text-center block"
             >
               Try to reconnect
-            </button>
+            </Link>
           </div>
         </main>
     );
@@ -175,12 +202,12 @@ export default async function Page() {
             <div className="text-5xl mb-5">📦</div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-3">No Sheets Found</h1>
             <p className="text-gray-600 dark:text-gray-400 mb-8 leading-relaxed">The connected document doesn&apos;t seem to contain any valid mod sheets or category tabs.</p>
-            <button
-                onClick={() => typeof window !== 'undefined' && window.location.reload()}
-                className="w-full py-3.5 bg-linear-to-r from-orange-500 to-rose-500 text-white rounded-xl font-medium hover:shadow-md hover:shadow-orange-200/50 transition-all active:scale-95"
+            <Link
+                href="/"
+                className="w-full py-3.5 bg-linear-to-r from-orange-500 to-rose-500 text-white rounded-xl font-medium hover:shadow-md hover:shadow-orange-200/50 transition-all active:scale-95 text-center block"
             >
               Refresh data
-            </button>
+            </Link>
           </div>
         </main>
     );

@@ -2,6 +2,7 @@
 import './globals.css';
 import React from 'react';
 import ThemeToggle from '@/components/ThemeToggle';
+import ReloadButton from '@/components/ReloadButton';
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -13,7 +14,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     return (
         <html lang="en" className="dark">
         <body className="antialiased">
-            <ThemeToggle />
+            <div className="fixed top-4 right-4 z-50 flex gap-2 items-center">
+                <ReloadButton />
+                <ThemeToggle />
+            </div>
             {children}
         </body>
         </html>

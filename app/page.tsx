@@ -215,7 +215,7 @@ export default async function Page() {
 
   return (
       <main className="min-h-screen bg-linear-to-b from-orange-50 to-rose-50 dark:from-gray-900 dark:to-gray-800 text-gray-900 dark:text-gray-100 selection:bg-orange-100 selection:text-orange-900 dark:selection:bg-orange-900 dark:selection:text-orange-100">
-        <div className="container mx-auto px-4 py-12 max-w-7xl">
+        <div className="mx-auto px-4 py-12 w-full max-w-7xl min-[1921px]:max-w-360 min-[2500px]:max-w-440 min-[3200px]:max-w-520">
           <header className="mb-16 text-center">
             <h1 className="text-5xl md:text-6xl font-bold tracking-tight text-gray-900 dark:text-white mb-5">
               Epicraft <span className="bg-linear-to-r from-orange-600 to-rose-600 dark:from-orange-500 dark:to-rose-500 bg-clip-text text-transparent">Mod Explorer</span>

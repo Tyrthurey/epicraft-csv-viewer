@@ -15,7 +15,7 @@ interface SheetData {
     rows: Row[];
 }
 
-const VersionBadge = ({ label, cell }: { label: string; cell: CellData }) => {
+const VersionBadge = ({ label, cell, isCompact }: { label: string; cell: CellData; isCompact?: boolean }) => {
     const value = cell?.value;
     const color = cell?.color;
     
@@ -63,9 +63,9 @@ const VersionBadge = ({ label, cell }: { label: string; cell: CellData }) => {
     }
 
     return (
-        <div className={`flex flex-col p-2.5 rounded-xl ${bgColor} transition-all duration-200 hover:scale-[1.02] justify-center min-h-15`}>
-            <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1 leading-tight">{label}</span>
-            <span className={`text-xs font-semibold leading-snug wrap-break-word ${textColor}`}>{displayText}</span>
+        <div className={`flex flex-col rounded-xl transition-all duration-200 hover:scale-[1.02] justify-center ${isCompact ? 'p-1.5 min-h-10' : 'p-2.5 min-h-15'} ${bgColor}`}>
+            <span className={`font-medium text-gray-500 dark:text-gray-400 mb-0.5 leading-tight ${isCompact ? 'text-[8px]' : 'text-[10px]'}`}>{label}</span>
+            <span className={`font-semibold leading-snug wrap-break-word ${textColor} ${isCompact ? 'text-[10px]' : 'text-xs'}`}>{displayText}</span>
         </div>
     );
 };
@@ -73,6 +73,7 @@ const VersionBadge = ({ label, cell }: { label: string; cell: CellData }) => {
 export default function TableClient({ sheets }: { sheets: SheetData[] }) {
     const [activeTab, setActiveTab] = useState(sheets[0]?.name || '');
     const [q, setQ] = useState('');
+    const [isCompact, setIsCompact] = useState(false);
 
     const currentSheet = useMemo(() => 
         sheets.find(s => s.name === activeTab) || sheets[0]
@@ -196,28 +197,44 @@ export default function TableClient({ sheets }: { sheets: SheetData[] }) {
 
             {/* Search Bar - Static */}
             <div className="mb-8">
-                <div className="relative max-w-2xl mx-auto">
-                    <input
-                        value={q}
-                        onChange={(e) => setQ(e.target.value)}
-                        placeholder={`Search ${filteredRows.length} mods...`}
-                        className="w-full pl-11 pr-11 py-3 rounded-xl border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-orange-400/20 focus:border-orange-400 dark:focus:border-orange-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm transition-all duration-200 text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500"
-                    />
-                    <div className="absolute left-3.5 top-3.5 text-gray-400">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                    </div>
-                    {q && (
-                        <button
-                            onClick={() => setQ('')}
-                            className="absolute right-3.5 top-3.5 text-gray-400 hover:text-orange-600 transition-colors"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                <div className="flex flex-col md:flex-row items-center gap-4 max-w-4xl mx-auto">
+                    <div className="relative flex-1 w-full">
+                        <input
+                            value={q}
+                            onChange={(e) => setQ(e.target.value)}
+                            placeholder={`Search ${filteredRows.length} mods...`}
+                            className="w-full pl-11 pr-11 py-3 rounded-xl border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-orange-400/20 focus:border-orange-400 dark:focus:border-orange-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm transition-all duration-200 text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                        />
+                        <div className="absolute left-3.5 top-3.5 text-gray-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                             </svg>
-                        </button>
-                    )}
+                        </div>
+                        {q && (
+                            <button
+                                onClick={() => setQ('')}
+                                className="absolute right-3.5 top-3.5 text-gray-400 hover:text-orange-600 transition-colors"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                </svg>
+                            </button>
+                        )}
+                    </div>
+                    
+                    <button
+                        onClick={() => setIsCompact(!isCompact)}
+                        className={`flex items-center gap-2 px-4 py-3 rounded-xl border transition-all duration-200 text-sm font-medium whitespace-nowrap w-full md:w-auto justify-center ${
+                            isCompact 
+                                ? 'bg-orange-100 dark:bg-orange-900/30 border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-400' 
+                                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                        }`}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
+                        </svg>
+                        Compact View
+                    </button>
                 </div>
             </div>
 
@@ -250,7 +267,11 @@ export default function TableClient({ sheets }: { sheets: SheetData[] }) {
                     );
 
                     return (
-                        <div key={groupIdx} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
+                        <div key={groupIdx} className={`grid gap-5 mb-8 ${
+                            isCompact 
+                                ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-[repeat(auto-fill,minmax(280px,1fr))]' 
+                                : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-[repeat(auto-fill,minmax(340px,1fr))]'
+                        }`}>
                             {rows.map((row, idx) => {
                                 const modNameCell = row['MOD NAME'] || Object.values(row)[0];
                                 const modName = String(modNameCell?.value || 'Unknown Mod');
@@ -285,20 +306,24 @@ export default function TableClient({ sheets }: { sheets: SheetData[] }) {
                                 const notes = [note1, note2].filter(n => n && n.length > 0);
 
                                 return (
-                                    <div key={idx} className="group bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 hover:border-orange-200 dark:hover:border-orange-700 shadow-sm hover:shadow-lg dark:hover:shadow-orange-900/20 transition-all duration-300 hover:-translate-y-0.5 flex flex-col h-full">
-                                        <div className="mb-4">
-                                            <h3 className="text-xl font-semibold text-gray-900 dark:text-white line-clamp-2 leading-snug group-hover:text-orange-600 dark:group-hover:text-orange-500 transition-colors duration-200">
+                                    <div key={idx} className={`group bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-orange-200 dark:hover:border-orange-700 shadow-sm hover:shadow-lg dark:hover:shadow-orange-900/20 transition-all duration-300 hover:-translate-y-0.5 flex flex-col h-full ${
+                                        isCompact ? 'p-3' : 'p-5'
+                                    }`}>
+                                        <div className={isCompact ? 'mb-2' : 'mb-4'}>
+                                            <h3 className={`font-semibold text-gray-900 dark:text-white line-clamp-2 leading-snug group-hover:text-orange-600 dark:group-hover:text-orange-500 transition-colors duration-200 ${
+                                                isCompact ? 'text-sm' : 'text-xl'
+                                            }`}>
                                                 {modName}
                                             </h3>
                                         </div>
 
-                                        <div className="grid grid-cols-2 gap-2.5 mb-5">
+                                        <div className={`grid grid-cols-2 gap-2 mb-4 ${isCompact ? 'gap-1.5 mb-3' : 'gap-2.5 mb-5'}`}>
                                             {versionFields.slice(0, 4).map(vf => (
-                                                <VersionBadge key={vf} label={vf} cell={row[vf]} />
+                                                <VersionBadge key={vf} label={vf} cell={row[vf]} isCompact={isCompact} />
                                             ))}
                                         </div>
 
-                                        {(notes.length > 0) && (
+                                        {!isCompact && (notes.length > 0) && (
                                             <div className="mb-5 space-y-2 grow">
                                                 {notes.map((n, i) => (
                                                     <p key={i} className="text-xs text-gray-600 dark:text-gray-400 bg-amber-50/50 dark:bg-amber-900/20 p-3 rounded-lg italic leading-relaxed">
@@ -308,16 +333,20 @@ export default function TableClient({ sheets }: { sheets: SheetData[] }) {
                                             </div>
                                         )}
 
-                                        <div className="flex flex-wrap gap-2 mt-auto pt-4 border-t border-gray-100 dark:border-gray-700">
+                                        <div className={`flex flex-wrap gap-2 mt-auto border-t border-gray-100 dark:border-gray-700 ${
+                                            isCompact ? 'pt-2' : 'pt-4'
+                                        }`}>
                                             {links.map((link, i) => (
                                                 <a
                                                     key={i}
                                                     href={link.url}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-medium bg-linear-to-r from-orange-50 to-rose-50 dark:from-orange-900/40 dark:to-rose-900/40 text-orange-700 dark:text-orange-400 hover:from-orange-500 hover:to-rose-500 dark:hover:from-orange-600 dark:hover:to-rose-600 hover:text-white hover:shadow-sm transition-all duration-200"
+                                                    className={`inline-flex items-center gap-1.5 rounded-lg font-medium bg-linear-to-r from-orange-50 to-rose-50 dark:from-orange-900/40 dark:to-rose-900/40 text-orange-700 dark:text-orange-400 hover:from-orange-500 hover:to-rose-500 dark:hover:from-orange-600 dark:hover:to-rose-600 hover:text-white hover:shadow-sm transition-all duration-200 ${
+                                                        isCompact ? 'px-2 py-1 text-[10px]' : 'px-3.5 py-2 text-xs'
+                                                    }`}
                                                 >
-                                                    <span className="text-xs">{link.url.includes('google.com/search') ? '🔍' : '↗'}</span>
+                                                    <span className={isCompact ? 'text-[10px]' : 'text-xs'}>{link.url.includes('google.com/search') ? '🔍' : '↗'}</span>
                                                     {link.label.startsWith('http') ? (
                                                         link.label.includes('modrinth') ? 'Modrinth' : link.label.includes('curseforge') ? 'CurseForge' : 'Source'
                                                     ) : (
@@ -330,9 +359,11 @@ export default function TableClient({ sheets }: { sheets: SheetData[] }) {
                                                     href={`https://www.google.com/search?q=${encodeURIComponent(modName + ' mod')}`}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-medium bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 transition-all duration-200"
+                                                    className={`inline-flex items-center gap-1.5 rounded-lg font-medium bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 transition-all duration-200 ${
+                                                        isCompact ? 'px-2 py-1 text-[10px]' : 'px-3.5 py-2 text-xs'
+                                                    }`}
                                                 >
-                                                    <span className="text-xs">🔍</span> Search web
+                                                    <span className={isCompact ? 'text-[10px]' : 'text-xs'}>🔍</span> Search web
                                                 </a>
                                             )}
                                         </div>

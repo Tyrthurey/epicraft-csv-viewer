@@ -213,7 +213,7 @@ export default function ModListClient({mods = [], availableCategories = []}: {
                             type="text"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            placeholder={`Search ${mods.length} mods...`}
+                            placeholder={`Search ${filteredMods.length} mods...`}
                             className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-orange-400/20 focus:border-orange-400 dark:focus:border-orange-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm transition-all duration-200"
                         />
                         <div className="absolute left-4 top-3.5 text-gray-400">

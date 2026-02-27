@@ -91,16 +91,22 @@ async function fetchExcelData(url: string): Promise<{ data?: SheetData[]; error?
           let cellValue: unknown = cell.value;
           let hyperlink: string | undefined;
 
-          // Handle hyperlinks
+          // Handle complex cell values (RichText, Hyperlink, Formula result)
           if (cellValue && typeof cellValue === 'object') {
-            if ('hyperlink' in cellValue) {
-               hyperlink = cleanGoogleLink(String((cellValue as { hyperlink: string }).hyperlink));
+            const valObj = cellValue as Record<string, unknown>;
+            
+            // 1. Extract hyperlink if present
+            if ('hyperlink' in valObj) {
+              hyperlink = cleanGoogleLink(String(valObj.hyperlink));
             }
-            if ('text' in cellValue) {
-               cellValue = (cellValue as { text: unknown }).text;
-            }
-            if (cellValue && typeof cellValue === 'object' && 'result' in cellValue) {
-               cellValue = (cellValue as { result: unknown }).result;
+            
+            // 2. Extract visible value
+            if ('richText' in valObj && Array.isArray(valObj.richText)) {
+              cellValue = (valObj.richText as { text: string }[]).map(rt => rt.text).join('');
+            } else if ('text' in valObj) {
+              cellValue = valObj.text;
+            } else if ('result' in valObj) {
+              cellValue = valObj.result;
             }
           }
 

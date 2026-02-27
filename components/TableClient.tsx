@@ -301,9 +301,9 @@ export default function TableClient({ sheets }: { sheets: SheetData[] }) {
                                 const link2 = getLinkInfo(row['Link 2']);
                                 const links = [link1, link2].filter((l): l is { url: string; label: string } => l !== null);
 
-                                const note1 = String(row['Video/Note']?.value || '');
-                                const note2 = String(row['Note 2']?.value || '');
-                                const notes = [note1, note2].filter(n => n && n.length > 0);
+                                const note1 = row['Video/Note'];
+                                const note2 = row['Note 2'];
+                                const notes = [note1, note2].filter((n): n is CellData => !!n && String(n.value || '').trim() !== '');
 
                                 return (
                                     <div key={idx} className={`group bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-orange-200 dark:hover:border-orange-700 shadow-sm hover:shadow-lg dark:hover:shadow-orange-900/20 transition-all duration-300 hover:-translate-y-0.5 flex flex-col h-full ${
@@ -313,7 +313,11 @@ export default function TableClient({ sheets }: { sheets: SheetData[] }) {
                                             <h3 className={`font-semibold text-gray-900 dark:text-white line-clamp-2 leading-snug group-hover:text-orange-600 dark:group-hover:text-orange-500 transition-colors duration-200 ${
                                                 isCompact ? 'text-sm' : 'text-xl'
                                             }`}>
-                                                {modName}
+                                                {modNameCell?.hyperlink ? (
+                                                    <a href={modNameCell.hyperlink} target="_blank" rel="noopener noreferrer" className="hover:underline decoration-orange-400 dark:decoration-orange-600 underline-offset-2">
+                                                        {modName}
+                                                    </a>
+                                                ) : modName}
                                             </h3>
                                         </div>
 
@@ -325,11 +329,45 @@ export default function TableClient({ sheets }: { sheets: SheetData[] }) {
 
                                         {!isCompact && (notes.length > 0) && (
                                             <div className="mb-5 space-y-2 grow">
-                                                {notes.map((n, i) => (
-                                                    <p key={i} className="text-xs text-gray-600 dark:text-gray-400 bg-amber-50/50 dark:bg-amber-900/20 p-3 rounded-lg italic leading-relaxed">
-                                                        {n}
-                                                    </p>
-                                                ))}
+                                                {notes.map((n, i) => {
+                                                    const text = String(n.value || '');
+                                                    const hyperlink = n.hyperlink;
+                                                    // Helper to make URLs in text clickable
+                                                    const renderClickableText = (val: string) => {
+                                                        const urlRegex = /(https?:\/\/[^\s]+)/g;
+                                                        const parts = val.split(urlRegex);
+                                                        return parts.map((part, index) => 
+                                                            urlRegex.test(part) ? (
+                                                                <a 
+                                                                    key={index} 
+                                                                    href={part} 
+                                                                    target="_blank" 
+                                                                    rel="noopener noreferrer" 
+                                                                    className="underline text-orange-600 dark:text-orange-400 decoration-orange-300 dark:decoration-orange-700 underline-offset-2 hover:text-rose-600 dark:hover:text-rose-400 transition-colors break-all"
+                                                                >
+                                                                    {part}
+                                                                </a>
+                                                            ) : part
+                                                        );
+                                                    };
+
+                                                    return (
+                                                        <p key={i} className="text-xs text-gray-600 dark:text-gray-400 bg-amber-50/50 dark:bg-amber-900/20 p-3 rounded-lg italic leading-relaxed">
+                                                            {hyperlink ? (
+                                                                <a 
+                                                                    href={hyperlink} 
+                                                                    target="_blank" 
+                                                                    rel="noopener noreferrer" 
+                                                                    className="underline text-orange-600 dark:text-orange-400 decoration-orange-300 dark:decoration-orange-700 underline-offset-2 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
+                                                                >
+                                                                    {text}
+                                                                </a>
+                                                            ) : (
+                                                                renderClickableText(text)
+                                                            )}
+                                                        </p>
+                                                    );
+                                                })}
                                             </div>
                                         )}
 

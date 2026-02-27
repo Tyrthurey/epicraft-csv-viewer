@@ -1,13 +1,18 @@
 'use client';
 import React, {useMemo, useState} from 'react';
 
+export interface ModLink {
+    url: string;
+    label: string;
+}
+
 export interface UnifiedMod {
     name: string;
     description: string;
     iconUrl: string | null;
     modrinthId: string | null;
     curseforgeId?: number | null;
-    links: string[];
+    links: ModLink[];
     support: {
         forge1201: boolean | 'partial' | 'unsure';
         fabric1201: boolean | 'partial' | 'unsure';
@@ -115,7 +120,8 @@ export default function ModListClient({mods = [], availableCategories = []}: {
                 m.name.toLowerCase().includes(s) ||
                 m.description.toLowerCase().includes(s) ||
                 (m.projectType && m.projectType.toLowerCase().includes(s)) ||
-                (m.isArchived && 'archived'.includes(s))
+                (m.isArchived && 'archived'.includes(s)) ||
+                m.links.some(l => l.label.toLowerCase().includes(s) || l.url.toLowerCase().includes(s))
             );
         }
 
@@ -301,7 +307,7 @@ export default function ModListClient({mods = [], availableCategories = []}: {
                                                                         ? `https://modrinth.com/mod/${mod.modrinthId}`
                                                                         : mod.curseforgeId
                                                                             ? `https://www.curseforge.com/projects/${mod.curseforgeId}`
-                                                                            : mod.links[0]
+                                                                            : mod.links[0]?.url
                                                                 )
                                                             }
                                                             target="_blank"
@@ -407,34 +413,44 @@ export default function ModListClient({mods = [], availableCategories = []}: {
 
                                     <div
                                         className={`mt-4 flex flex-wrap gap-2 pt-4 border-t border-gray-100 dark:border-gray-700 ${isCompact ? 'hidden' : ''}`}>
-                                        {mod.links.filter(l => l.trim() !== '').map((link, lIdx) => {
-                                            const isModrinth = link.includes('modrinth.com');
-                                            const isCurseForge = link.includes('curseforge.com');
-                                            let label = 'Link';
-                                            if (isModrinth) label = 'Modrinth';
-                                            else if (isCurseForge) label = 'CurseForge';
-                                            else if (link.includes('google.com/search')) label = 'Search';
+                                        {mod.links.filter(l => l.url.trim() !== '').map((link, lIdx) => {
+                                            const url = link.url;
+                                            let displayLabel = link.label.trim();
+                                            if (displayLabel.startsWith('http')) {
+                                                if (displayLabel.includes('modrinth')) displayLabel = 'MODRINTH URL';
+                                                else if (displayLabel.includes('curseforge')) displayLabel = 'CURSEFORGE URL';
+                                                else displayLabel = 'URL';
+                                            }
+                                            displayLabel = displayLabel.toUpperCase();
 
                                             return (
                                                 <a
                                                     key={lIdx}
-                                                    href={link}
+                                                    href={url}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-orange-100 dark:hover:bg-orange-900/30 hover:text-orange-700 dark:hover:text-orange-400 transition-colors cursor-pointer"
+                                                    className="inline-flex items-center gap-1 text-[10px] font-bold tracking-wider px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-orange-100 dark:hover:bg-orange-900/30 hover:text-orange-700 dark:hover:text-orange-400 transition-colors cursor-pointer"
                                                 >
-                                                    {label}
+                                                    {url.includes('google.com/search') ? '🔍' : (
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5"
+                                                             fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round"
+                                                                  strokeWidth={2.5}
+                                                                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                                                        </svg>
+                                                    )}
+                                                    <span>{lIdx > 0 ? `ALTERNATIVE: ${displayLabel}` : displayLabel}</span>
                                                 </a>
                                             );
                                         })}
-                                        {(mod.links.filter(l => l.trim() !== '').length === 0) && (
+                                        {(mod.links.filter(l => l.url.trim() !== '').length === 0) && (
                                             <a
                                                 href={`https://www.google.com/search?q=${encodeURIComponent(mod.name + ' minecraft mod')}`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                                 className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-orange-100 dark:hover:bg-orange-900/30 hover:text-orange-700 dark:hover:text-orange-400 transition-colors cursor-pointer"
                                             >
-                                                🔍 Search web
+                                                🔍 SEARCH WEB
                                             </a>
                                         )}
                                     </div>

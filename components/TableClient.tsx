@@ -436,25 +436,39 @@ export default function TableClient({sheets}: { sheets: SheetData[] }) {
                                             className={`flex flex-wrap gap-2 ${notes.length > 0 && !isCompact ? '' : 'mt-auto'} border-t border-gray-100 dark:border-gray-700 ${
                                                 isCompact ? 'pt-2' : 'pt-4'
                                             }`}>
-                                            {links.map((link, i) => (
-                                                <a
-                                                    key={i}
-                                                    href={link.url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className={`inline-flex items-center gap-1.5 rounded-lg font-medium bg-linear-to-r from-orange-50 to-rose-50 dark:from-orange-900/40 dark:to-rose-900/40 text-orange-700 dark:text-orange-400 hover:from-orange-500 hover:to-rose-500 dark:hover:from-orange-600 dark:hover:to-rose-600 hover:text-white hover:shadow-sm transition-all duration-200 ${
-                                                        isCompact ? 'px-2 py-1 text-[10px]' : 'px-3.5 py-2 text-xs'
-                                                    }`}
-                                                >
-                                                    <span
-                                                        className={isCompact ? 'text-[10px]' : 'text-xs'}>{link.url.includes('google.com/search') ? '🔍' : '↗'}</span>
-                                                    {link.label.startsWith('http') ? (
-                                                        link.label.includes('modrinth') ? 'Modrinth' : link.label.includes('curseforge') ? 'CurseForge' : 'Source'
-                                                    ) : (
-                                                        link.label
-                                                    )}
-                                                </a>
-                                            ))}
+                                            {links.map((link, i) => {
+                                                let displayLabel = link.label.trim();
+                                                if (displayLabel.startsWith('http')) {
+                                                    if (displayLabel.includes('modrinth')) displayLabel = 'MODRINTH URL';
+                                                    else if (displayLabel.includes('curseforge')) displayLabel = 'CURSEFORGE URL';
+                                                    else displayLabel = 'URL';
+                                                }
+                                                displayLabel = displayLabel.toUpperCase();
+
+                                                return (
+                                                    <a
+                                                        key={i}
+                                                        href={link.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className={`inline-flex items-center gap-1.5 rounded-lg font-bold bg-linear-to-r from-orange-50 to-rose-50 dark:from-orange-900/40 dark:to-rose-900/40 text-orange-700 dark:text-orange-400 hover:from-orange-500 hover:to-rose-500 dark:hover:from-orange-600 dark:hover:to-rose-600 hover:text-white hover:shadow-sm transition-all duration-200 ${
+                                                            isCompact ? 'px-2 py-1 text-[9px]' : 'px-3.5 py-2 text-[11px]'
+                                                        }`}
+                                                    >
+                                                        {link.url.includes('google.com/search') ? '🔍' : (
+                                                            <svg xmlns="http://www.w3.org/2000/svg"
+                                                                 className={isCompact ? "h-2.5 w-2.5" : "h-3 w-3"}
+                                                                 fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round"
+                                                                      strokeWidth={2.5}
+                                                                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                                                            </svg>
+                                                        )}
+                                                        {i === 1 && <span className="mr-0.5">ALTERNATIVE:</span>}
+                                                        {displayLabel}
+                                                    </a>
+                                                );
+                                            })}
                                             {links.length === 0 && (
                                                 <a
                                                     href={`https://www.google.com/search?q=${encodeURIComponent(modName + ' mod')}`}
@@ -465,8 +479,8 @@ export default function TableClient({sheets}: { sheets: SheetData[] }) {
                                                     }`}
                                                 >
                                                     <span
-                                                        className={isCompact ? 'text-[10px]' : 'text-xs'}>🔍</span> Search
-                                                    web
+                                                        className={isCompact ? 'text-[10px]' : 'text-xs'}>🔍</span> SEARCH
+                                                    WEB
                                                 </a>
                                             )}
                                         </div>

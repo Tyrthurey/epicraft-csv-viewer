@@ -1,5 +1,5 @@
 import React from 'react';
-import {fetchExcelData, Row} from '@/lib/excel';
+import {fetchExcelData, Row, CellData} from '@/lib/excel';
 import {fetchModrinthProjects, checkSupport, ModrinthProject} from '@/lib/modrinth';
 import {
     fetchCurseForgeMods,
@@ -8,7 +8,7 @@ import {
     CurseForgeMod,
     getCurseForgeApiKey
 } from '@/lib/curseforge';
-import ModListClient, {UnifiedMod} from '@/components/ModListClient';
+import ModListClient, {UnifiedMod, ModLink} from '@/components/ModListClient';
 
 export const dynamic = 'force-dynamic';
 
@@ -158,7 +158,8 @@ export default async function ModListPage() {
     const entries: Array<{
         modName: string;
         description: string;
-        link: string;
+        primaryLink: string;
+        links: ModLink[];
         modrinthId: string | null;
         curseforgeSlug: string | null;
         projectType: string;
@@ -184,17 +185,34 @@ export default async function ModListPage() {
             const modName = String(modNameCell?.value || '').trim();
             if (!modName) continue;
 
-            const link1 = row['Link']?.hyperlink || String(row['Link']?.value || '');
-            const link2 = row['Link 2']?.hyperlink || String(row['Link 2']?.value || '');
+            const link1Cell = row['Link'];
+            const link2Cell = row['Link 2'];
             const modNameHyperlink = modNameCell?.hyperlink;
 
-            const rowLinks = [modNameHyperlink, link1, link2]
-                .filter((l): l is string => typeof l === 'string' && l.trim().length > 0)
-                .map(l => {
-                    if (l.startsWith('http')) return normalizeLink(l);
-                    // Handle search terms like in TableClient.tsx
-                    return `https://www.google.com/search?q=${encodeURIComponent(modName + ' ' + l)}`;
-                });
+            const getLinkData = (cell: CellData | undefined, defaultLabel?: string): ModLink | null => {
+                if (!cell) return null;
+                const value = String(cell.value || '').trim();
+                const hyperlink = cell.hyperlink;
+                if (!hyperlink && !value) return null;
+
+                let url = hyperlink || value;
+                if (!url.startsWith('http')) {
+                    url = `https://www.google.com/search?q=${encodeURIComponent(modName + ' ' + url)}`;
+                } else {
+                    url = normalizeLink(url);
+                }
+
+                return {
+                    url,
+                    label: value || defaultLabel || url
+                };
+            };
+
+            const rowLinks: ModLink[] = [
+                modNameHyperlink ? {url: normalizeLink(modNameHyperlink), label: modName} : null,
+                getLinkData(link1Cell),
+                getLinkData(link2Cell)
+            ].filter((l): l is ModLink => l !== null);
 
             const note1 = row['Video/Note'];
             const note2 = row['Note 2'];
@@ -239,19 +257,26 @@ export default async function ModListPage() {
                 support.fabric1211 = true;
             }
 
-            const linksToPush = rowLinks.length > 0 ? rowLinks : [''];
-            for (const link of linksToPush) {
-                const modrinthInfo = extractModrinthId(link);
-                const curseforgeSlug = extractCurseForgeSlug(link);
+            const linksToPush = rowLinks.length > 0 ? rowLinks : [{url: '', label: ''}];
+            for (const primaryLink of linksToPush) {
+                const modrinthInfo = extractModrinthId(primaryLink.url);
+                const curseforgeSlug = extractCurseForgeSlug(primaryLink.url);
 
                 let effectiveType = modrinthInfo?.type || 'mod';
                 if (isDatapack && effectiveType === 'mod') effectiveType = 'datapack';
                 if (isResourcePack && effectiveType === 'mod') effectiveType = 'resourcepack';
 
+                // Reorder links so that primaryLink is first
+                const orderedLinks = [
+                    primaryLink,
+                    ...rowLinks.filter(l => l.url !== primaryLink.url)
+                ];
+
                 entries.push({
                     modName,
                     description,
-                    link,
+                    primaryLink: primaryLink.url,
+                    links: orderedLinks,
                     modrinthId: modrinthInfo?.id || null,
                     curseforgeSlug,
                     projectType: effectiveType,
@@ -285,13 +310,13 @@ export default async function ModListPage() {
         };
     };
 
-    // Deduplicate entries by mod name + normalized link, merging categories and notes
+    // Deduplicate entries by mod name + primary link, merging categories and notes
     const uniqueEntriesMap = new Map<string, typeof entries[0] & {
         categories: string[],
         subcategories: Record<string, string>
     }>();
     for (const entry of entries) {
-        const key = `${entry.modName.toLowerCase()}|${entry.link.toLowerCase()}`;
+        const key = `${entry.modName.toLowerCase()}|${entry.primaryLink.toLowerCase()}`;
         const existing = uniqueEntriesMap.get(key);
         if (existing) {
             existing.support = mergeSupport(existing.support, entry.support);
@@ -300,6 +325,12 @@ export default async function ModListPage() {
             }
             if (entry.subcategory) {
                 existing.subcategories[entry.category] = entry.subcategory;
+            }
+            // Merge links, keeping primary links first
+            for (const entryLink of entry.links) {
+                if (!existing.links.some(l => l.url === entryLink.url)) {
+                    existing.links.push(entryLink);
+                }
             }
             // Merge notes if they are different
             for (const note of entry.notes) {
@@ -403,7 +434,7 @@ export default async function ModListPage() {
                 description: project.description,
                 iconUrl: project.icon_url,
                 modrinthId: project.id,
-                links: [entry.link],
+                links: entry.links,
                 projectType: effectiveType,
                 isArchived: entry.isArchived || project.status === 'archived',
                 downloads: project.downloads,
@@ -440,7 +471,7 @@ export default async function ModListPage() {
                 iconUrl: cfProject.logo?.thumbnailUrl || cfProject.logo?.url || null,
                 modrinthId: null,
                 curseforgeId: cfProject.id,
-                links: [entry.link],
+                links: entry.links,
                 projectType: effectiveType,
                 isArchived: entry.isArchived || cfProject.status === 6,
                 downloads: cfProject.downloadCount,
@@ -472,7 +503,7 @@ export default async function ModListPage() {
                 description: entry.description,
                 iconUrl: null,
                 modrinthId: null,
-                links: [entry.link],
+                links: entry.links,
                 projectType: entry.projectType,
                 isArchived: entry.isArchived,
                 categories: entry.categories,

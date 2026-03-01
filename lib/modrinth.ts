@@ -19,13 +19,12 @@ export interface ModrinthProject {
     updated: string;
 }
 
-
 export interface ModrinthDependency {
     projects: ModrinthProject[];
     versions: {
         id: string;
         project_id: string;
-        dependency_type: 'required' | 'optional' | 'incompatible' | 'embedded';
+        dependency_type: "required" | "optional" | "incompatible" | "embedded";
     }[];
 }
 
@@ -39,7 +38,7 @@ export interface ModrinthProjectVersion {
     dependencies: {
         project_id: string | null;
         version_id: string | null;
-        dependency_type: 'required' | 'optional' | 'incompatible' | 'embedded';
+        dependency_type: "required" | "optional" | "incompatible" | "embedded";
     }[];
 }
 
@@ -52,14 +51,17 @@ const DEFAULT_MODRINTH_REVALIDATE = 604800;
  * Common headers for Modrinth API requests
  */
 const MODRINTH_HEADERS = {
-    'User-Agent': 'epicraft-csv-viewer (https://github.com/Tyrthurey/epicraft-csv-viewer)'
+    "User-Agent":
+        "epicraft-csv-viewer (https://github.com/Tyrthurey/epicraft-csv-viewer)",
 };
 
 /**
  * Get the revalidation period for Modrinth API calls
  */
 function getRevalidate(): number {
-    return parseInt(process.env.MODRINTH_REVALIDATE || String(DEFAULT_MODRINTH_REVALIDATE));
+    return parseInt(
+        process.env.MODRINTH_REVALIDATE || String(DEFAULT_MODRINTH_REVALIDATE),
+    );
 }
 
 /**
@@ -76,14 +78,16 @@ function getRevalidate(): number {
  * }
  * ```
  */
-export async function fetchModrinthDependencies(idOrSlug: string): Promise<ModrinthDependency | null> {
+export async function fetchModrinthDependencies(
+    idOrSlug: string,
+): Promise<ModrinthDependency | null> {
     const url = `https://api.modrinth.com/v2/project/${idOrSlug}/dependencies`;
     const revalidate = getRevalidate();
 
     try {
         const res = await fetch(url, {
             headers: MODRINTH_HEADERS,
-            next: {revalidate}
+            next: {revalidate},
         });
 
         if (res.ok) {
@@ -91,10 +95,14 @@ export async function fetchModrinthDependencies(idOrSlug: string): Promise<Modri
         }
 
         if (res.status === 429) {
-            console.warn(`[Server] Modrinth API rate limit hit while fetching dependencies for ${idOrSlug}`);
+            console.warn(
+                `[Server] Modrinth API rate limit hit while fetching dependencies for ${idOrSlug}`,
+            );
         } else {
-            const errorBody = await res.text().catch(() => '');
-            console.error(`Modrinth Dependency API error for ${idOrSlug}: ${res.status} ${res.statusText} - ${errorBody}`);
+            const errorBody = await res.text().catch(() => "");
+            console.error(
+                `Modrinth Dependency API error for ${idOrSlug}: ${res.status} ${res.statusText} - ${errorBody}`,
+            );
         }
     } catch (err) {
         console.error(`Modrinth dependency fetch error for ${idOrSlug}:`, err);
@@ -107,24 +115,37 @@ export async function fetchModrinthDependencies(idOrSlug: string): Promise<Modri
  * Fetches all versions of a Modrinth project.
  *
  * @param idOrSlug - The ID or slug of the Modrinth project
+ * @param options - `delayMs`: Delay between requests, `noCache`: Skip cache
  * @returns An array of project versions
  *
  * @example
  * ```ts
  * const versions = await fetchModrinthProjectVersions('sodium');
- * const fabric1201Versions = versions.filter(v => 
+ * const fabric1201Versions = versions.filter(v =>
  *   v.game_versions.includes('1.20.1') && v.loaders.includes('fabric')
  * );
  * ```
  */
-export async function fetchModrinthProjectVersions(idOrSlug: string): Promise<ModrinthProjectVersion[]> {
+export async function fetchModrinthProjectVersions(
+    idOrSlug: string,
+    options?: {
+        delayMs?: number;
+        noCache?: boolean;
+    },
+): Promise<ModrinthProjectVersion[]> {
+    // Apply optional delay for rate limiting in bulk operations
+    if (options?.delayMs && options.delayMs > 0) {
+        await delay(options.delayMs);
+    }
+
     const url = `https://api.modrinth.com/v2/project/${idOrSlug}/version`;
-    const revalidate = getRevalidate();
 
     try {
         const res = await fetch(url, {
             headers: MODRINTH_HEADERS,
-            next: {revalidate}
+            next: options?.noCache
+                ? {revalidate: 0}
+                : {revalidate: getRevalidate()},
         });
 
         if (res.ok) {
@@ -132,10 +153,14 @@ export async function fetchModrinthProjectVersions(idOrSlug: string): Promise<Mo
         }
 
         if (res.status === 429) {
-            console.warn(`[Server] Modrinth API rate limit hit while fetching versions for ${idOrSlug}`);
+            console.warn(
+                `[Server] Modrinth API rate limit hit while fetching versions for ${idOrSlug}`,
+            );
         } else {
-            const errorBody = await res.text().catch(() => '');
-            console.error(`Modrinth versions API error for ${idOrSlug}: ${res.status} ${res.statusText} - ${errorBody}`);
+            const errorBody = await res.text().catch(() => "");
+            console.error(
+                `Modrinth versions API error for ${idOrSlug}: ${res.status} ${res.statusText} - ${errorBody}`,
+            );
         }
     } catch (err) {
         console.error(`Modrinth versions fetch error for ${idOrSlug}:`, err);
@@ -145,12 +170,28 @@ export async function fetchModrinthProjectVersions(idOrSlug: string): Promise<Mo
 }
 
 /**
- * Fetches multiple Modrinth projects by their IDs in bulk.
- *
- * @param ids - Array of Modrinth project IDs
- * @returns An array of Modrinth project data
+ * Batch size for bulk project requests to avoid large responses and rate limits
  */
-export async function fetchModrinthProjects(ids: string[]): Promise<ModrinthProject[]> {
+const BATCH_SIZE = 50;
+
+/**
+ * Delay between batches in milliseconds to avoid rate limiting
+ */
+const RATE_LIMIT_DELAY = 500;
+
+/**
+ * Delay utility for rate limiting
+ */
+function delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Fetches a single batch of Modrinth projects
+ */
+async function fetchModrinthProjectsBatch(
+    ids: string[],
+): Promise<ModrinthProject[]> {
     if (ids.length === 0) return [];
 
     const url = `https://api.modrinth.com/v2/projects?ids=${encodeURIComponent(JSON.stringify(ids))}`;
@@ -159,35 +200,81 @@ export async function fetchModrinthProjects(ids: string[]): Promise<ModrinthProj
     try {
         const res = await fetch(url, {
             headers: MODRINTH_HEADERS,
-            next: {revalidate}
+            next: {revalidate},
         });
 
         if (res.ok) {
-            return await res.json() as ModrinthProject[];
+            return (await res.json()) as ModrinthProject[];
         }
 
         if (res.status === 429) {
-            console.warn(`[Server] Modrinth API rate limit hit during bulk project fetch`);
+            console.warn(
+                `[Server] Modrinth API rate limit hit during bulk project fetch`,
+            );
         } else {
-            const errorBody = await res.text().catch(() => '');
-            console.error(`Modrinth bulk project API error: ${res.status} ${res.statusText} - ${errorBody}`);
+            const errorBody = await res.text().catch(() => "");
+            console.error(
+                `Modrinth bulk project API error: ${res.status} ${res.statusText} - ${errorBody}`,
+            );
         }
     } catch (err) {
-        console.error('Modrinth fetch error:', err);
+        console.error("Modrinth fetch error:", err);
     }
 
     return [];
 }
 
-export function checkSupport(project: ModrinthProject, loader: string, version: string, typeOverride?: string): boolean {
-    const hasVersion = project.game_versions.some(v => v === version);
+/**
+ * Fetches multiple Modrinth projects by their IDs in bulk.
+ * Processes requests in batches to avoid large responses and rate limits.
+ *
+ * @param ids - Array of Modrinth project IDs
+ * @returns An array of Modrinth project data
+ */
+export async function fetchModrinthProjects(
+    ids: string[],
+): Promise<ModrinthProject[]> {
+    if (ids.length === 0) return [];
+
+    // Process in batches to avoid large responses and rate limits
+    const results: ModrinthProject[] = [];
+
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+        const batch = ids.slice(i, i + BATCH_SIZE);
+
+        try {
+            const batchResults = await fetchModrinthProjectsBatch(batch);
+            results.push(...batchResults);
+
+            // Add delay between batches to avoid rate limiting
+            if (i + BATCH_SIZE < ids.length) {
+                await delay(RATE_LIMIT_DELAY);
+            }
+        } catch (err) {
+            console.error(
+                `Failed to fetch batch ${Math.floor(i / BATCH_SIZE) + 1}:`,
+                err,
+            );
+        }
+    }
+
+    return results;
+}
+
+export function checkSupport(
+    project: ModrinthProject,
+    loader: string,
+    version: string,
+    typeOverride?: string,
+): boolean {
+    const hasVersion = project.game_versions.some((v) => v === version);
     if (!hasVersion) return false;
 
     const type = typeOverride || project.project_type;
     // Resourcepacks and datapacks are compatible with all modloaders for their MC version
-    if (type === 'resourcepack' || type === 'datapack') {
+    if (type === "resourcepack" || type === "datapack") {
         return true;
     }
 
-    return project.loaders.some(l => l.toLowerCase() === loader.toLowerCase());
+    return project.loaders.some((l) => l.toLowerCase() === loader.toLowerCase());
 }

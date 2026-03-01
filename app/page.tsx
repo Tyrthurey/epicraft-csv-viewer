@@ -1,6 +1,10 @@
 import React from 'react';
 import {fetchExcelData, Row, CellData} from '@/lib/excel';
-import {fetchModrinthProjects, checkSupport, ModrinthProject} from '@/lib/modrinth';
+import {
+    fetchModrinthProjects,
+    checkSupport,
+    ModrinthProject
+} from '@/lib/modrinth';
 import {
     fetchCurseForgeMods,
     resolveCurseForgeSlug,
@@ -366,7 +370,6 @@ export default async function ModListPage() {
     const curseForgeSlugToIdMap = new Map<string, number>();
 
     if (curseForgeApiKey) {
-        console.log(`[Server] Found CurseForge API key (length: ${curseForgeApiKey.length})`);
         const curseForgeSlugs = Array.from(new Set(
             finalEntries.map(e => e.curseforgeSlug).filter((s): s is string => !!s)
         ));
@@ -434,6 +437,7 @@ export default async function ModListPage() {
                 description: project.description,
                 iconUrl: project.icon_url,
                 modrinthId: project.id,
+                curseforgeId: curseForgeId,
                 links: entry.links,
                 projectType: effectiveType,
                 isArchived: entry.isArchived || project.status === 'archived',
@@ -503,6 +507,7 @@ export default async function ModListPage() {
                 description: entry.description,
                 iconUrl: null,
                 modrinthId: null,
+                curseforgeId: curseForgeId,
                 links: entry.links,
                 projectType: entry.projectType,
                 isArchived: entry.isArchived,

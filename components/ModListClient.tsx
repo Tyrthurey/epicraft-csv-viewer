@@ -34,6 +34,211 @@ export interface CategoryInfo {
     subcategories: string[];
 }
 
+const TARGETS = [
+    {label: 'Fabric 1.20.1', id: 'fabric_1_20_1'},
+    {label: 'Forge 1.20.1', id: 'forge_1_20_1'},
+    {label: 'Fabric 1.21.1', id: 'fabric_1_21_1'},
+    {label: 'NeoForge 1.21.1', id: 'neoforge_1_21_1'},
+];
+
+const safeStorage = {
+    getItem: (key: string) => {
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                return localStorage.getItem(key);
+            }
+        } catch (e) {
+            console.warn('localStorage access failed:', e);
+        }
+        return null;
+    },
+    setItem: (key: string, value: string) => {
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                localStorage.setItem(key, value);
+            }
+        } catch (e) {
+            console.warn('localStorage access failed:', e);
+        }
+    },
+    removeItem: (key: string) => {
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                localStorage.removeItem(key);
+            }
+        } catch (e) {
+            console.warn('localStorage access failed:', e);
+        }
+    }
+};
+
+const ModDependencies = ({mod, modDeps, isCompact}: {
+    mod: UnifiedMod;
+    modDeps: Record<string, { required: { name: string, url: string }[], optional: { name: string, url: string }[] }>;
+    isCompact: boolean;
+}) => {
+    const hasAnyDeps = TARGETS.some(t =>
+        modDeps[t.id] && (modDeps[t.id].required.length > 0 || modDeps[t.id].optional.length > 0)
+    );
+
+    if (!hasAnyDeps) return null;
+
+    // Identify versions supported according to spreadsheet
+    const supportedTargets = TARGETS.filter(t => {
+        const supportKey = t.id.replace(/_/g, '') as keyof typeof mod.support;
+        return mod.support[supportKey] !== false;
+    });
+
+    // Identify versions that actually have dependency data
+    const versionsWithDeps = TARGETS.filter(t =>
+        modDeps[t.id] && (modDeps[t.id].required.length > 0 || modDeps[t.id].optional.length > 0)
+    );
+
+    // Find common required (must be in ALL supported targets)
+    let commonRequired: { name: string; url: string }[] = [];
+    if (supportedTargets.length > 0) {
+        const firstTargetDeps = modDeps[supportedTargets[0].id]?.required || [];
+        commonRequired = [...firstTargetDeps];
+        for (let i = 1; i < supportedTargets.length; i++) {
+            const currentDeps = modDeps[supportedTargets[i].id]?.required || [];
+            commonRequired = commonRequired.filter(cd =>
+                currentDeps.some(d => d.url === cd.url)
+            );
+        }
+    }
+
+    // Find common optional (must be in ALL supported targets)
+    let commonOptional: { name: string; url: string }[] = [];
+    if (supportedTargets.length > 0) {
+        const firstTargetDeps = modDeps[supportedTargets[0].id]?.optional || [];
+        commonOptional = [...firstTargetDeps];
+        for (let i = 1; i < supportedTargets.length; i++) {
+            const currentDeps = modDeps[supportedTargets[i].id]?.optional || [];
+            commonOptional = commonOptional.filter(cd =>
+                currentDeps.some(d => d.url === cd.url)
+            );
+        }
+    }
+
+    const anyRequired = commonRequired.length > 0 || versionsWithDeps.some(t => modDeps[t.id].required.length > 0);
+    const anyOptional = commonOptional.length > 0 || versionsWithDeps.some(t => modDeps[t.id].optional.length > 0);
+
+    // Version Specific Dependencies
+    const specificDepsPerVersion = versionsWithDeps.map(target => ({
+        target,
+        required: modDeps[target.id].required.filter(d => !commonRequired.some(cd => cd.url === d.url)),
+        optional: modDeps[target.id].optional.filter(d => !commonOptional.some(cd => cd.url === d.url))
+    })).filter(sd => sd.required.length > 0 || sd.optional.length > 0);
+
+    const groupedSpecific: {
+        labels: string[],
+        required: { name: string, url: string }[],
+        optional: { name: string, url: string }[]
+    }[] = [];
+    specificDepsPerVersion.forEach(sd => {
+        const match = groupedSpecific.find(g => {
+            if (g.required.length !== sd.required.length || g.optional.length !== sd.optional.length) return false;
+            return g.required.every(gr => sd.required.some(sr => sr.url === gr.url)) &&
+                g.optional.every(go => sd.optional.some(so => so.url === go.url));
+        });
+
+        if (match) {
+            match.labels.push(sd.target.label);
+        } else {
+            groupedSpecific.push({
+                labels: [sd.target.label],
+                required: sd.required,
+                optional: sd.optional
+            });
+        }
+    });
+
+    return (
+        <div
+            className={`mt-3 space-y-2 pt-3 border-t border-gray-100/50 dark:border-gray-700/50 ${isCompact ? 'text-[9px]' : 'text-[10px]'}`}>
+            {/* Header & Legend */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                <div
+                    className="font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mr-1">
+                    Dependencies
+                </div>
+                {(anyRequired || anyOptional) && (
+                    <div
+                        className="flex flex-wrap gap-x-2 text-[8px] font-bold uppercase tracking-wider opacity-60 mr-2">
+                        {anyRequired &&
+                            <span
+                                className="text-rose-600 dark:text-rose-400 whitespace-nowrap">Red = Required</span>}
+                        {anyOptional &&
+                            <span
+                                className="text-amber-600 dark:text-amber-400 whitespace-nowrap">Orange = Optional</span>}
+                    </div>
+                )}
+            </div>
+
+            {/* Common Dependencies */}
+            {(commonRequired.length > 0 || commonOptional.length > 0) && (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                    {groupedSpecific.length > 0 && (
+                        <div
+                            className="text-[8px] font-bold text-gray-400 dark:text-gray-600 uppercase tracking-tighter mr-1 whitespace-nowrap">
+                            Universal:
+                        </div>
+                    )}
+                    {commonRequired.map((dep, i) => (
+                        <a key={i} href={dep.url} target="_blank"
+                           rel="noopener noreferrer"
+                           className="px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400 border border-rose-200/50 dark:border-rose-800/50 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors whitespace-nowrap">
+                            {dep.name}
+                        </a>
+                    ))}
+                    {commonOptional.map((dep, i) => (
+                        <a key={i} href={dep.url} target="_blank"
+                           rel="noopener noreferrer"
+                           className="px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200/50 dark:border-amber-800/50 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors whitespace-nowrap">
+                            {dep.name}
+                        </a>
+                    ))}
+                </div>
+            )}
+
+            {/* Grouped Version Specific Dependencies */}
+            {groupedSpecific.map((group, idx) => (
+                <div key={idx}
+                     className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <div
+                        className="text-[8px] font-bold text-gray-400 dark:text-gray-600 uppercase tracking-tighter mr-1 whitespace-nowrap">
+                        {group.labels.map((label, i) => (
+                            <React.Fragment key={i}>
+                                <span
+                                    className="bg-gray-100 dark:bg-gray-700/50 px-1 py-0.5 rounded text-gray-600 dark:text-gray-300 mr-1">
+                                    {label}
+                                </span>
+                                {i < group.labels.length - 1 &&
+                                    <span className="mr-1">&</span>}
+                            </React.Fragment>
+                        ))}
+                        specific:
+                    </div>
+                    {group.required.map((dep, i) => (
+                        <a key={i} href={dep.url} target="_blank"
+                           rel="noopener noreferrer"
+                           className="px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400 border border-rose-200/50 dark:border-rose-800/50 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors whitespace-nowrap">
+                            {dep.name}
+                        </a>
+                    ))}
+                    {group.optional.map((dep, i) => (
+                        <a key={i} href={dep.url} target="_blank"
+                           rel="noopener noreferrer"
+                           className="px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200/50 dark:border-amber-800/50 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors whitespace-nowrap">
+                            {dep.name}
+                        </a>
+                    ))}
+                </div>
+            ))}
+        </div>
+    );
+};
+
 const SupportBadge = ({label, status, isCompact}: {
     label: string;
     status: boolean | 'partial' | 'unsure';
@@ -103,6 +308,145 @@ export default function ModListClient({mods = [], availableCategories = []}: {
     const [platformFilter, setPlatformFilter] = useState<string | null>(null);
     const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
     const [isCompact, setIsCompact] = useState(false);
+    const [isDependencyView, setIsDependencyView] = useState(false);
+    const [dependencies, setDependencies] = useState<Record<string, Record<string, {
+        required: { name: string, url: string }[],
+        optional: { name: string, url: string }[]
+    }>>>({});
+    const [loadingDeps, setLoadingDeps] = useState<Set<string>>(new Set());
+    const [isLoaded, setIsLoaded] = useState(false);
+
+    // Refs for use in effects to avoid unnecessary re-triggers
+    const dependenciesRef = React.useRef(dependencies);
+    dependenciesRef.current = dependencies;
+    const loadingDepsRef = React.useRef(loadingDeps);
+    loadingDepsRef.current = loadingDeps;
+
+    // Load from localStorage on mount
+    React.useEffect(() => {
+        const compact = safeStorage.getItem('epicraft_isCompact') === 'true';
+        const depView = safeStorage.getItem('epicraft_isDependencyView') === 'true';
+        const deps = safeStorage.getItem('epicraft_dependencies');
+
+        if (compact) setIsCompact(true);
+        if (depView) setIsDependencyView(true);
+        if (deps) {
+            try {
+                setDependencies(JSON.parse(deps));
+            } catch (e) {
+                console.error('Failed to parse dependencies from storage', e);
+            }
+        }
+        setIsLoaded(true);
+    }, []);
+
+    // Save preferences and dependencies to localStorage
+    React.useEffect(() => {
+        if (isLoaded) {
+            safeStorage.setItem('epicraft_isCompact', String(isCompact));
+        }
+    }, [isCompact, isLoaded]);
+
+    React.useEffect(() => {
+        if (isLoaded) {
+            safeStorage.setItem('epicraft_isDependencyView', String(isDependencyView));
+        }
+    }, [isDependencyView, isLoaded]);
+
+    React.useEffect(() => {
+        if (isLoaded && Object.keys(dependencies).length > 0) {
+            safeStorage.setItem('epicraft_dependencies', JSON.stringify(dependencies));
+        }
+    }, [dependencies, isLoaded]);
+
+    React.useEffect(() => {
+        if (!isLoaded) return;
+        const controller = new AbortController();
+        const fetchDeps = async () => {
+            const currentDeps = dependenciesRef.current;
+            const currentLoading = loadingDepsRef.current;
+            const toFetch = mods.filter(m => {
+                const id = m.modrinthId ? `modrinth_${m.modrinthId}` : `curseforge_${m.curseforgeId}`;
+                return (m.modrinthId || m.curseforgeId) && !currentDeps[id] && !currentLoading.has(id);
+            });
+
+            if (toFetch.length === 0) return;
+
+            const modrinthIds: string[] = [];
+            const curseforgeIds: number[] = [];
+
+            toFetch.forEach(m => {
+                if (m.modrinthId) {
+                    modrinthIds.push(m.modrinthId);
+                } else if (m.curseforgeId) {
+                    curseforgeIds.push(m.curseforgeId);
+                }
+            });
+
+            const modrinthChunks = [];
+            for (let i = 0; i < modrinthIds.length; i += 10) modrinthChunks.push(modrinthIds.slice(i, i + 10));
+
+            const curseforgeChunks = [];
+            for (let i = 0; i < curseforgeIds.length; i += 10) curseforgeChunks.push(curseforgeIds.slice(i, i + 10));
+
+            setLoadingDeps(prev => {
+                const next = new Set(prev);
+                toFetch.forEach(m => {
+                    const id = m.modrinthId ? `modrinth_${m.modrinthId}` : `curseforge_${m.curseforgeId}`;
+                    next.add(id);
+                });
+                return next;
+            });
+
+            try {
+                for (const chunk of modrinthChunks) {
+                    try {
+                        const res = await fetch(`/api/mods/dependencies?modrinthIds=${chunk.join(',')}`, {
+                            signal: controller.signal
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            setDependencies(prev => ({...prev, ...data}));
+                        }
+                    } catch (e: unknown) {
+                        if (e instanceof Error && e.name !== 'AbortError') console.error(e);
+                    }
+                }
+
+                for (const chunk of curseforgeChunks) {
+                    try {
+                        const res = await fetch(`/api/mods/dependencies?curseforgeIds=${chunk.join(',')}`, {
+                            signal: controller.signal
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            setDependencies(prev => ({...prev, ...data}));
+                        }
+                    } catch (e: unknown) {
+                        if (e instanceof Error && e.name !== 'AbortError') console.error(e);
+                    }
+                }
+            } finally {
+                setLoadingDeps(prev => {
+                    const next = new Set(prev);
+                    toFetch.forEach(m => next.delete(m.modrinthId ? `modrinth_${m.modrinthId}` : `curseforge_${m.curseforgeId}`));
+                    return next;
+                });
+            }
+        };
+
+        fetchDeps();
+        return () => controller.abort();
+    }, [mods, isLoaded]); // Depend on mods and isLoaded to ensure we have localStorage data first
+
+    const clearDependencyCache = () => {
+        if (confirm('Clear all cached dependency data?')) {
+            setDependencies({});
+            safeStorage.removeItem('epicraft_dependencies');
+        }
+    };
+
+    const cachedCount = Object.keys(dependencies).length;
 
     const filters = [
         {id: 'forge1201', label: 'Forge 1.20.1'},
@@ -137,36 +481,38 @@ export default function ModListClient({mods = [], availableCategories = []}: {
     }, [mods, search, platformFilter, categoryFilter]);
 
     const groupedMods = useMemo(() => {
-        if (!categoryFilter) return [{name: null, mods: filteredMods}];
+        if (categoryFilter) {
+            const catInfo = availableCategories.find(c => c.name === categoryFilter);
+            const subOrder = catInfo?.subcategories || [];
 
-        const catInfo = availableCategories.find(c => c.name === categoryFilter);
-        const subOrder = catInfo?.subcategories || [];
+            const groups: Record<string, UnifiedMod[]> = {};
+            const others: UnifiedMod[] = [];
 
-        const groups: Record<string, UnifiedMod[]> = {};
-        const others: UnifiedMod[] = [];
+            filteredMods.forEach(mod => {
+                const sub = mod.subcategories?.[categoryFilter];
+                if (sub) {
+                    if (!groups[sub]) groups[sub] = [];
+                    groups[sub].push(mod);
+                } else {
+                    others.push(mod);
+                }
+            });
 
-        filteredMods.forEach(mod => {
-            const sub = mod.subcategories?.[categoryFilter];
-            if (sub) {
-                if (!groups[sub]) groups[sub] = [];
-                groups[sub].push(mod);
-            } else {
-                others.push(mod);
+            const result = [];
+            if (others.length > 0) {
+                result.push({name: 'General', mods: others});
             }
-        });
 
-        const result = [];
-        if (others.length > 0) {
-            result.push({name: 'General', mods: others});
+            subOrder.forEach(sub => {
+                if (groups[sub]) {
+                    result.push({name: sub, mods: groups[sub]});
+                }
+            });
+
+            return result;
         }
 
-        subOrder.forEach(sub => {
-            if (groups[sub]) {
-                result.push({name: sub, mods: groups[sub]});
-            }
-        });
-
-        return result;
+        return [{name: null, mods: filteredMods}];
     }, [filteredMods, categoryFilter, availableCategories]);
 
     const renderClickableText = (val: string) => {
@@ -189,24 +535,24 @@ export default function ModListClient({mods = [], availableCategories = []}: {
 
     return (
         <div className="space-y-8">
-            {/* Category Filters - Now on Top, Full Width, and Bigger */}
-            <div className="flex flex-wrap justify-center gap-2.5 mb-8">
-                {availableCategories.map((cat) => (
-                    <button
-                        key={cat.name}
-                        onClick={() => setCategoryFilter(categoryFilter === cat.name ? null : cat.name)}
-                        className={`cursor-pointer px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-200 border ${
-                            categoryFilter === cat.name
-                                ? 'bg-linear-to-r from-orange-500 to-rose-500 text-white border-transparent shadow-md shadow-orange-200/50 dark:shadow-orange-900/50'
-                                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-gray-700'
-                        }`}
-                    >
-                        {cat.name}
-                    </button>
-                ))}
-            </div>
+            <div className="max-w-5xl mx-auto space-y-6">
+                {/* Category Filters */}
+                <div className="flex flex-wrap justify-center gap-2.5 mb-8">
+                    {availableCategories.map((cat) => (
+                        <button
+                            key={cat.name}
+                            onClick={() => setCategoryFilter(categoryFilter === cat.name ? null : cat.name)}
+                            className={`cursor-pointer px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-200 border ${
+                                categoryFilter === cat.name
+                                    ? 'bg-linear-to-r from-orange-500 to-rose-500 text-white border-transparent shadow-md shadow-orange-200/50 dark:shadow-orange-900/50'
+                                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-gray-700'
+                            }`}
+                        >
+                            {cat.name}
+                        </button>
+                    ))}
+                </div>
 
-            <div className="max-w-4xl mx-auto space-y-6">
                 <div className="flex flex-col md:flex-row items-center gap-4 w-full">
                     <div className="relative flex-1 w-full">
                         <input
@@ -240,7 +586,54 @@ export default function ModListClient({mods = [], availableCategories = []}: {
                         </svg>
                         Compact View
                     </button>
+
+                    <button
+                        onClick={() => setIsDependencyView(!isDependencyView)}
+                        className={`flex items-center gap-2 px-4 py-3 rounded-xl border transition-all duration-200 text-sm font-medium whitespace-nowrap w-full md:w-auto justify-center cursor-pointer ${
+                            isDependencyView
+                                ? 'bg-orange-100 dark:bg-orange-900/30 border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-400'
+                                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                        }`}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                             stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                  d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                        </svg>
+                        Dependency View
+                    </button>
+
+                    {isDependencyView && cachedCount > 0 && (
+                        <button
+                            onClick={clearDependencyCache}
+                            className="flex items-center gap-2 px-3 py-3 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all duration-200 cursor-pointer"
+                            title="Clear Dependency Cache"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                                 stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                        </button>
+                    )}
                 </div>
+                {isDependencyView && (
+                    <div className="flex justify-center items-center gap-4 text-[11px] text-gray-400 font-medium">
+                        <span>{mods.length} Mods</span>
+                        {cachedCount > 0 && (
+                            <>
+                                <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                                <span>{cachedCount} Cached</span>
+                            </>
+                        )}
+                        {loadingDeps.size > 0 && (
+                            <>
+                                <span className="w-1 h-1 rounded-full bg-orange-400 animate-pulse"></span>
+                                <span className="text-orange-500">Fetching {loadingDeps.size}...</span>
+                            </>
+                        )}
+                    </div>
+                )}
 
                 {/* Platform Filters */}
                 <div className="grid grid-cols-2 sm:flex sm:flex-wrap justify-center gap-2">
@@ -384,6 +777,14 @@ export default function ModListClient({mods = [], availableCategories = []}: {
                                         <SupportBadge label={isCompact ? 'FAB 1.21.1' : 'Fabric 1.21.1'}
                                                       status={mod.support.fabric1211} isCompact={isCompact}/>
                                     </div>
+
+                                    {/* Dependencies Section */}
+                                    {isDependencyView && (() => {
+                                        const depKey = mod.modrinthId ? `modrinth_${mod.modrinthId}` : (mod.curseforgeId ? `curseforge_${mod.curseforgeId}` : null);
+                                        const modDeps = depKey ? dependencies[depKey] : null;
+                                        if (!modDeps) return null;
+                                        return <ModDependencies mod={mod} modDeps={modDeps} isCompact={isCompact}/>;
+                                    })()}
 
                                     {mod.notes && mod.notes.length > 0 && !isCompact && (
                                         <div

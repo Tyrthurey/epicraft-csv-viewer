@@ -16,7 +16,11 @@ It fetches the latest `.xlsx` version of the spreadsheet, parses it with `excelj
     - **Important:** If your API key contains `$` symbols, you **must** escape them with a backslash: `\$`.
     - Example: If your key is `$2a$10$abc`, enter it as `CURSEFORGE_API_KEY=\$2a\$10\$abc`
     - This is required because Next.js uses `$` for environment variable interpolation.
-4. `npm run dev`
+4. (Optional) Add `CURSEFORGE_MOD_CACHE_TTL` (in seconds) to configure the mod data cache TTL (default: 86400, i.e., 24
+   hours).
+5. (Optional) Add `MODRINTH_REVALIDATE` (in seconds) to configure the Modrinth API revalidation period (default: 604800,
+   i.e., 7 days).
+6. `npm run dev`
 
 The current document url is:
 

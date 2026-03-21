@@ -160,9 +160,9 @@ const TagBadge = ({
 
   return (
     <div
-      className={`inline-flex items-center gap-1 rounded-lg font-bold uppercase tracking-wider border shrink-0 transition-all ${isCompact ? "px-2 py-1 text-[9px]" : "px-2.5 py-1 text-[10px]"} ${styles}`}
+      className={`inline-flex items-center gap-1 rounded-lg font-bold uppercase tracking-wider border shrink-0 transition-all ${isCompact ? "px-1.5 py-0.5 text-[10px]" : "px-2.5 py-1 text-[10px]"} ${styles}`}
     >
-      <span>{label}</span>
+      <span>{isCompact ? label.charAt(0) : label}</span>
     </div>
   );
 };
@@ -398,6 +398,47 @@ export default function ModListClient({
     return result;
   }, [mods, search, categoryFilter]);
 
+  const sortModsByPriority = (mods: UnifiedMod[]) => {
+    return [...mods].sort((a, b) => {
+      // First sort by priority: recommended (3) > untagged (2) > default (1)
+      const getPriority = (mod: UnifiedMod) => {
+        if (mod.recommended) return 3;
+        if (mod.default) return 1;
+        return 2;
+      };
+
+      const priorityA = getPriority(a);
+      const priorityB = getPriority(b);
+
+      if (priorityA !== priorityB) {
+        return priorityB - priorityA;
+      }
+
+      // Within same priority, place special types (shader, resourcepack, plugin, datapack) at the end
+      const isSpecialType = (mod: UnifiedMod) => {
+        const type = mod.projectType?.toLowerCase() || "mod";
+        return type !== "mod";
+      };
+
+      const specialA = isSpecialType(a);
+      const specialB = isSpecialType(b);
+
+      if (specialA !== specialB) {
+        return specialA ? 1 : -1; // Special types go to the end
+      }
+
+      // Within same type category, sort by downloads (descending)
+      const downloadsA = a.downloads ?? -1;
+      const downloadsB = b.downloads ?? -1;
+      if (downloadsA !== downloadsB) {
+        return downloadsB - downloadsA;
+      }
+
+      // Fallback to name
+      return a.name.localeCompare(b.name);
+    });
+  };
+
   const groupedMods = useMemo(() => {
     if (categoryFilter) {
       const catInfo = availableCategories.find(
@@ -420,19 +461,19 @@ export default function ModListClient({
 
       const result = [];
       if (others.length > 0) {
-        result.push({ name: "General", mods: others });
+        result.push({ name: "General", mods: sortModsByPriority(others) });
       }
 
       subOrder.forEach((sub) => {
         if (groups[sub]) {
-          result.push({ name: sub, mods: groups[sub] });
+          result.push({ name: sub, mods: sortModsByPriority(groups[sub]) });
         }
       });
 
       return result;
     }
 
-    return [{ name: null, mods: filteredMods }];
+    return [{ name: null, mods: sortModsByPriority(filteredMods) }];
   }, [filteredMods, categoryFilter, availableCategories]);
 
   const renderClickableText = (val: string) => {
@@ -637,14 +678,33 @@ export default function ModListClient({
               {group.mods.map((mod) => (
                 <div
                   key={mod.name}
-                  className={`group rounded-2xl border shadow-sm transition-all duration-200 hover:-translate-y-1 flex flex-col h-full ${
+                  className={`group relative rounded-2xl border shadow-sm transition-all duration-200 hover:-translate-y-1 flex flex-col h-full ${
                     mod.recommended
-                      ? "bg-orange-50/30 dark:bg-orange-950/20 border-orange-300 dark:border-orange-600/60 ring-1 ring-orange-200/50 dark:ring-orange-800/30 shadow-[0_2px_8px_-2px_rgba(234,88,12,0.15)] dark:shadow-[0_2px_8px_-2px_rgba(234,88,12,0.2)]"
-                      : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                      ? "bg-emerald-50/30 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-600/60 ring-1 ring-emerald-200/50 dark:ring-emerald-800/30 shadow-[0_2px_8px_-2px_rgba(16,185,129,0.15)] dark:shadow-[0_2px_8px_-2px_rgba(16,185,129,0.2)]"
+                      : mod.default
+                        ? "bg-blue-50/30 dark:bg-blue-950/20 border-blue-300 dark:border-blue-600/60 ring-1 ring-blue-200/50 dark:ring-blue-800/30 shadow-[0_2px_8px_-2px_rgba(59,130,246,0.15)] dark:shadow-[0_2px_8px_-2px_rgba(59,130,246,0.2)]"
+                        : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
                   } hover:shadow-[6px_6px_20px_-2px_rgba(234,88,12,0.15)] dark:hover:shadow-[6px_6px_20px_-2px_rgba(234,88,12,0.25)] hover:bg-orange-50/40 dark:hover:bg-gray-700/30 hover:border-orange-500/30 hover:ring-1 hover:ring-orange-500/20 ${
                     isCompact ? "p-3" : "p-6"
                   }`}
                 >
+                  {/* Top Right Tags */}
+                  <div
+                    className={`absolute top-0 right-0 flex gap-1 ${isCompact ? "p-1.5" : "p-2"}`}
+                  >
+                    <TagBadge
+                      label="Recommended"
+                      active={mod.recommended}
+                      isCompact={isCompact}
+                      variant="recommended"
+                    />
+                    <TagBadge
+                      label="Default"
+                      active={mod.default}
+                      isCompact={isCompact}
+                      variant="default"
+                    />
+                  </div>
                   <div
                     className={`flex items-start gap-4 ${isCompact ? "mb-2" : "mb-4"}`}
                   >
@@ -695,13 +755,7 @@ export default function ModListClient({
                             mod.name
                           )}
                         </h3>
-                        {!isCompact &&
-                          mod.projectType &&
-                          mod.projectType !== "mod" && (
-                            <span className="px-1.5 py-0.5 rounded-md bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap shrink-0">
-                              {mod.projectType}
-                            </span>
-                          )}
+
                         {!isCompact && mod.isArchived && (
                           <span className="px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap shrink-0">
                             Archived
@@ -770,23 +824,6 @@ export default function ModListClient({
                     </div>
                   </div>
 
-                  <div
-                    className={`mt-auto ${isCompact ? "grid grid-cols-2 gap-1.5 mb-2" : "flex flex-wrap gap-2"}`}
-                  >
-                    <TagBadge
-                      label="Recommended"
-                      active={mod.recommended}
-                      isCompact={isCompact}
-                      variant="recommended"
-                    />
-                    <TagBadge
-                      label="Default"
-                      active={mod.default}
-                      isCompact={isCompact}
-                      variant="default"
-                    />
-                  </div>
-
                   {/* Dependencies Section */}
                   {isDependencyView &&
                     (() => {
@@ -810,9 +847,11 @@ export default function ModListClient({
                       {mod.notes.map((n) => (
                         <div
                           key={`note-${n.value}`}
-                          className="text-[10px] text-gray-600 dark:text-gray-400 italic leading-tight flex gap-1.5 items-start"
+                          className="text-xs text-gray-100 dark:text-gray-100 leading-relaxed flex gap-2 items-start"
                         >
-                          <span className="text-amber-500/70 shrink-0">📌</span>
+                          <span className="text-amber-500 shrink-0 mt-0.5">
+                            📌
+                          </span>
                           <div className="min-w-0">
                             {n.hyperlink ? (
                               <a
@@ -835,6 +874,11 @@ export default function ModListClient({
                   <div
                     className={`mt-4 flex flex-wrap gap-2 pt-4 border-t border-gray-100 dark:border-gray-700 ${isCompact ? "hidden" : ""}`}
                   >
+                    {mod.projectType && mod.projectType !== "mod" && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 text-[10px] font-bold uppercase tracking-wider">
+                        {mod.projectType}
+                      </span>
+                    )}
                     {mod.links
                       .filter((l) => l.url.trim() !== "")
                       .map((link, linkIdx) => {

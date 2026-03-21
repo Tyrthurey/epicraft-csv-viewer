@@ -1,9 +1,14 @@
 import React from "react";
 import { fetchExcelData, Row, CellData } from "@/lib/excel";
-import { fetchModrinthProjects, ModrinthProject } from "@/lib/modrinth";
+import {
+  fetchModrinthProjects,
+  checkSupport,
+  ModrinthProject,
+} from "@/lib/modrinth";
 import {
   fetchCurseForgeMods,
   resolveCurseForgeSlug,
+  checkCurseForgeSupport,
   CurseForgeMod,
   getCurseForgeApiKey,
 } from "@/lib/curseforge";
@@ -412,6 +417,22 @@ export default async function ModListPage() {
     }
 
     const isSpecial = effectiveType !== "mod";
+
+    // Filter: Only include mods that support NeoForge 1.21.1
+    const supportsNeoForge1211 = project
+      ? checkSupport(project, "neoforge", "1.21.1", effectiveType)
+      : cfProject
+        ? checkCurseForgeSupport(
+            cfProject,
+            "neoforge",
+            "1.21.1",
+            effectiveType === "resourcepack" || effectiveType === "datapack",
+          )
+        : false;
+
+    if (!supportsNeoForge1211) {
+      continue; // Skip mods that don't support NeoForge 1.21.1
+    }
 
     if (project) {
       const unified: UnifiedMod = {
